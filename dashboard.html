@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetSpy — Network Monitor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg:        #0a0d12;
+    --bg2:       #0f1318;
+    --bg3:       #141920;
+    --border:    #1e2530;
+    --border2:   #252e3d;
+    --text:      #c9d1e0;
+    --dim:       #4a5568;
+    --accent:    #00d4aa;
+    --accent2:   #0099ff;
+    --danger:    #ff4757;
+    --warning:   #ffa502;
+    --info:      #70a1ff;
+    --normal:    #c9d1e0;
+    --dns:       #a29bfe;
+    --mono:      'JetBrains Mono', monospace;
+    --sans:      'Inter', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Top bar ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 20px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 2px;
+    user-select: none;
+  }
+  .logo span { color: var(--dim); font-weight: 400; }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--dim);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .status-dot.live {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+  }
+
+  #status-text {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+  }
+
+  .spacer { flex: 1; }
+
+  .controls { display: flex; align-items: center; gap: 10px; }
+
+  select, input[type=text] {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 4px;
+    outline: none;
+    height: 30px;
+  }
+  select:focus, input[type=text]:focus {
+    border-color: var(--accent);
+  }
+  input[type=text]::placeholder { color: var(--dim); }
+
+  .btn {
+    height: 30px;
+    padding: 0 14px;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .btn-start  { background: var(--accent);  color: #0a0d12; }
+  .btn-stop   { background: var(--danger);  color: #fff; }
+  .btn-clear  { background: var(--bg3); border: 1px solid var(--border2); color: var(--dim); }
+  .btn-clear:hover { color: var(--text); border-color: var(--dim); }
+
+  /* ── Main layout ── */
+  .main {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    grid-template-rows: auto 1fr;
+    flex: 1;
+    overflow: hidden;
+    gap: 0;
+  }
+
+  /* ── Stats sidebar ── */
+  .sidebar {
+    grid-row: 1 / 3;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .panel {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--dim);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase;
+  }
+  .panel-body { padding: 10px 12px; }
+
+  /* counters */
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+  }
+  .stat-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .stat-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+  }
+  .stat-val {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .big-count {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -1px;
+  }
+  .big-sub {
+    font-size: 10px;
+    color: var(--dim);
+    margin-top: 2px;
+  }
+
+  /* sparkline */
+  #sparkline { display: block; width: 100%; height: 48px; }
+
+  /* top IPs / ports list */
+  .top-list { display: flex; flex-direction: column; gap: 5px; }
+  .top-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .top-item-label {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--dim);
+  }
+  .top-item-label span:last-child { color: var(--text); }
+  .top-bar-wrap {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .top-bar-fill {
+    height: 100%;
+    background: var(--accent2);
+    border-radius: 2px;
+    transition: width 0.4s;
+  }
+
+  /* ── Chart row ── */
+  .chart-row {
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    background: var(--bg2);
+    flex-shrink: 0;
+  }
+
+  /* protocol donut (CSS only) */
+  .donut-wrap { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
+  #proto-donut { width: 64px; height: 64px; }
+  .donut-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .donut-center .num {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+  }
+  .donut-center .lbl {
+    font-size: 8px;
+    color: var(--dim);
+    margin-top: 1px;
+  }
+
+  .legend {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--dim);
+  }
+  .legend-dot { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+
+  .timeline-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .timeline-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 1px;
+  }
+  #timeline-canvas { display: block; width: 100%; height: 48px; }
+
+  /* ── Packet table ── */
+  .table-wrap {
+    flex: 1;
+    overflow-y: auto;
+    position: relative;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg2);
+  }
+  thead th {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--dim);
+    text-transform: uppercase;
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    user-select: none;
+  }
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+    cursor: default;
+  }
+  tbody tr:hover { background: var(--bg3); }
+  tbody tr.new-packet { animation: rowIn 0.25s ease; }
+  @keyframes rowIn {
+    from { opacity: 0; transform: translateX(-6px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  td {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+  }
+
+  /* column widths */
+  .col-id    { width: 52px;  color: var(--dim); }
+  .col-time  { width: 76px;  color: var(--dim); }
+  .col-proto { width: 80px; }
+  .col-src   { width: 160px; }
+  .col-dst   { width: 160px; }
+  .col-len   { width: 60px;  color: var(--dim); text-align: right; }
+  .col-info  { /* flex */ }
+
+  /* protocol pills */
+  .proto-pill {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  /* severity row tints */
+  tr.sev-danger td { color: #ff7a85; }
+  tr.sev-danger .proto-pill { background: rgba(255,71,87,.15); color: #ff4757; }
+  tr.sev-warning td { color: #ffd580; }
+  tr.sev-warning .proto-pill { background: rgba(255,165,2,.15); color: #ffa502; }
+  tr.sev-info .proto-pill { background: rgba(112,161,255,.12); color: var(--info); }
+  tr.sev-normal .proto-pill { background: rgba(0,212,170,.08); color: var(--accent); }
+
+  /* proto-specific pills */
+  .pill-dns    { background: rgba(162,155,254,.12); color: var(--dns); }
+  .pill-http   { background: rgba(0,153,255,.12); color: var(--accent2); }
+  .pill-https  { background: rgba(0,212,170,.12); color: var(--accent); }
+  .pill-ssh    { background: rgba(255,165,2,.15); color: var(--warning); }
+  .pill-arp    { background: rgba(112,161,255,.12); color: var(--info); }
+  .pill-icmp   { background: rgba(112,161,255,.12); color: var(--info); }
+  .pill-tcp    { background: rgba(0,212,170,.08); color: var(--accent); }
+  .pill-udp    { background: rgba(0,153,255,.08); color: var(--accent2); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* empty state */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--dim);
+    gap: 8px;
+  }
+  .empty-state .icon { font-size: 32px; opacity: 0.4; }
+  .empty-state p { font-family: var(--mono); font-size: 11px; }
+
+  /* filter bar */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    flex-shrink: 0;
+  }
+  .filter-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 1px;
+  }
+  .filter-btn {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 3px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--dim);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .filter-btn:hover, .filter-btn.active {
+    background: var(--accent);
+    color: #0a0d12;
+    border-color: var(--accent);
+  }
+  #pkt-search {
+    margin-left: auto;
+    width: 180px;
+    height: 24px;
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+  .bytes-display {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    margin-left: auto;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <div class="logo">NET<span>SPY</span></div>
+  <div class="status-dot" id="status-dot"></div>
+  <span id="status-text">IDLE</span>
+
+  <div class="spacer"></div>
+
+  <div class="controls">
+    <select id="iface-select" title="Network interface">
+      <option value="">Auto-detect</option>
+      {% for iface in interfaces %}
+      <option value="{{ iface }}">{{ iface }}</option>
+      {% endfor %}
+    </select>
+
+    <input type="text" id="bpf-input" placeholder="BPF filter (e.g. tcp port 80)" style="width:200px">
+
+    <button class="btn btn-start" id="btn-start" onclick="startCapture()">▶ START</button>
+    <button class="btn btn-stop"  id="btn-stop"  onclick="stopCapture()" disabled>■ STOP</button>
+    <button class="btn btn-clear" id="btn-clear" onclick="clearData()">CLR</button>
+  </div>
+</header>
+
+<!-- ── Main ── -->
+<div class="main">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+
+    <div class="panel">
+      <div class="panel-title">Packets</div>
+      <div class="panel-body">
+        <div class="big-count" id="total-count">0</div>
+        <div class="big-sub" id="bytes-count">0 B captured</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Protocols</div>
+      <div class="panel-body" style="display:flex;flex-direction:column;gap:4px">
+        <div class="stat-row">
+          <span class="stat-label"><span class="stat-dot" style="background:var(--accent)"></span>TCP</span>
+          <span class="stat-val" id="s-tcp">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label"><span class="stat-dot" style="background:var(--accent2)"></span>UDP</span>
+          <span class="stat-val" id="s-udp">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label"><span class="stat-dot" style="background:var(--dns)"></span>DNS</span>
+          <span class="stat-val" id="s-dns">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label"><span class="stat-dot" style="background:var(--info)"></span>ICMP</span>
+          <span class="stat-val" id="s-icmp">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label"><span class="stat-dot" style="background:var(--dim)"></span>ARP</span>
+          <span class="stat-val" id="s-arp">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Top Sources</div>
+      <div class="panel-body">
+        <div class="top-list" id="top-src"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Top Destinations</div>
+      <div class="panel-body">
+        <div class="top-list" id="top-dst"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Top Services</div>
+      <div class="panel-body">
+        <div class="top-list" id="top-ports"></div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- Right side -->
+  <div style="display:flex;flex-direction:column;overflow:hidden;">
+
+    <!-- Chart row -->
+    <div class="chart-row">
+      <div class="donut-wrap">
+        <svg id="proto-donut" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="26" fill="none" stroke="#1e2530" stroke-width="10"/>
+          <circle id="d-tcp"  cx="32" cy="32" r="26" fill="none" stroke="#00d4aa" stroke-width="10" stroke-dasharray="0 164" stroke-dashoffset="41" transform="rotate(-90 32 32)"/>
+          <circle id="d-udp"  cx="32" cy="32" r="26" fill="none" stroke="#0099ff" stroke-width="10" stroke-dasharray="0 164" stroke-dashoffset="41" transform="rotate(-90 32 32)"/>
+          <circle id="d-dns"  cx="32" cy="32" r="26" fill="none" stroke="#a29bfe" stroke-width="10" stroke-dasharray="0 164" stroke-dashoffset="41" transform="rotate(-90 32 32)"/>
+          <circle id="d-icmp" cx="32" cy="32" r="26" fill="none" stroke="#70a1ff" stroke-width="10" stroke-dasharray="0 164" stroke-dashoffset="41" transform="rotate(-90 32 32)"/>
+          <circle id="d-other"cx="32" cy="32" r="26" fill="none" stroke="#252e3d" stroke-width="10" stroke-dasharray="0 164" stroke-dashoffset="41" transform="rotate(-90 32 32)"/>
+        </svg>
+        <div class="donut-center">
+          <span class="num" id="donut-total">0</span>
+          <span class="lbl">pkts</span>
+        </div>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot" style="background:#00d4aa"></span>TCP</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#0099ff"></span>UDP</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#a29bfe"></span>DNS</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#70a1ff"></span>ICMP</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#252e3d"></span>Other</div>
+      </div>
+
+      <div class="timeline-wrap">
+        <span class="timeline-label">PACKETS / SEC</span>
+        <canvas id="timeline-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="filter-bar">
+      <span class="filter-label">FILTER</span>
+      <button class="filter-btn active" data-filter="all"   onclick="setFilter('all',this)">ALL</button>
+      <button class="filter-btn" data-filter="TCP"   onclick="setFilter('TCP',this)">TCP</button>
+      <button class="filter-btn" data-filter="UDP"   onclick="setFilter('UDP',this)">UDP</button>
+      <button class="filter-btn" data-filter="DNS"   onclick="setFilter('DNS',this)">DNS</button>
+      <button class="filter-btn" data-filter="HTTP"  onclick="setFilter('HTTP',this)">HTTP</button>
+      <button class="filter-btn" data-filter="HTTPS" onclick="setFilter('HTTPS',this)">HTTPS</button>
+      <button class="filter-btn" data-filter="ICMP"  onclick="setFilter('ICMP',this)">ICMP</button>
+      <button class="filter-btn" data-filter="ARP"   onclick="setFilter('ARP',this)">ARP</button>
+      <button class="filter-btn" data-filter="danger" onclick="setFilter('danger',this)" style="color:var(--danger);border-color:var(--danger)">⚠ SUSPICIOUS</button>
+      <input type="text" id="pkt-search" placeholder="Search IP, port, info…" oninput="renderTable()">
+    </div>
+
+    <!-- Packet table -->
+    <div class="table-wrap" id="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="col-id">#</th>
+            <th class="col-time">TIME</th>
+            <th class="col-proto">PROTOCOL</th>
+            <th class="col-src">SOURCE</th>
+            <th class="col-dst">DESTINATION</th>
+            <th class="col-len">LEN</th>
+            <th class="col-info">INFO</th>
+          </tr>
+        </thead>
+        <tbody id="pkt-tbody"></tbody>
+      </table>
+      <div class="empty-state" id="empty-state">
+        <div class="icon">📡</div>
+        <p>Press START to begin capturing packets</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let allPackets   = [];
+let lastId       = 0;
+let running      = false;
+let pollTimer    = null;
+let activeFilter = 'all';
+let autoScroll   = true;
+const MAX_DISPLAY = 300;
+
+// ── Controls ───────────────────────────────────────────────────────────────
+async function startCapture() {
+  const iface  = document.getElementById('iface-select').value;
+  const filter = document.getElementById('bpf-input').value;
+  const res    = await fetch('/api/start', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ iface, filter }),
+  });
+  const data = await res.json();
+  if (data.ok || data.running) setRunning(true);
+  pollTimer = setInterval(poll, 1000);
+}
+
+async function stopCapture() {
+  await fetch('/api/stop', { method: 'POST' });
+  setRunning(false);
+  clearInterval(pollTimer);
+}
+
+async function clearData() {
+  await fetch('/api/clear', { method: 'POST' });
+  allPackets = [];
+  lastId     = 0;
+  renderTable();
+  updateStats({ total:0, tcp:0, udp:0, dns:0, icmp:0, arp:0, other:0, bytes:0,
+                top_src:[], top_dst:[], top_ports:[], timeline:[] });
+}
+
+function setRunning(r) {
+  running = r;
+  document.getElementById('status-dot').className  = 'status-dot' + (r ? ' live' : '');
+  document.getElementById('status-text').textContent = r ? 'CAPTURING' : 'IDLE';
+  document.getElementById('btn-start').disabled = r;
+  document.getElementById('btn-stop').disabled  = !r;
+}
+
+// ── Polling ────────────────────────────────────────────────────────────────
+async function poll() {
+  const [pktsRes, statsRes] = await Promise.all([
+    fetch(`/api/packets?since=${lastId}&limit=100`),
+    fetch('/api/stats'),
+  ]);
+  const newPkts = await pktsRes.json();
+  const stats   = await statsRes.json();
+
+  if (newPkts.length > 0) {
+    allPackets.push(...newPkts);
+    if (allPackets.length > 1000) allPackets = allPackets.slice(-1000);
+    lastId = newPkts[newPkts.length - 1].id;
+    renderTable(newPkts);
+  }
+  updateStats(stats);
+}
+
+// ── Filter ─────────────────────────────────────────────────────────────────
+function setFilter(f, el) {
+  activeFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderTable();
+}
+
+function matchesFilter(p) {
+  if (activeFilter === 'all')    return true;
+  if (activeFilter === 'danger') return p.severity === 'danger' || p.severity === 'warning';
+  return p.protocol === activeFilter;
+}
+
+function matchesSearch(p, q) {
+  if (!q) return true;
+  q = q.toLowerCase();
+  return (
+    (p.src_ip  && p.src_ip.includes(q)) ||
+    (p.dst_ip  && p.dst_ip.includes(q)) ||
+    (p.info    && p.info.toLowerCase().includes(q)) ||
+    (p.protocol && p.protocol.toLowerCase().includes(q)) ||
+    (p.src_port && String(p.src_port).includes(q)) ||
+    (p.dst_port && String(p.dst_port).includes(q))
+  );
+}
+
+// ── Render table ───────────────────────────────────────────────────────────
+const PILL_CLASS = {
+  DNS:'pill-dns', HTTP:'pill-http', HTTPS:'pill-https',
+  SSH:'pill-ssh', ARP:'pill-arp', ICMP:'pill-icmp',
+  TCP:'pill-tcp', UDP:'pill-udp',
+};
+
+function protoPill(proto) {
+  const cls = PILL_CLASS[proto] || 'pill-tcp';
+  return `<span class="proto-pill ${cls}">${proto}</span>`;
+}
+
+function fmtAddr(ip, port) {
+  if (!ip) return '—';
+  return port ? `${ip}<span style="color:var(--dim)">:${port}</span>` : ip;
+}
+
+function renderTable(newOnly) {
+  const tbody  = document.getElementById('pkt-tbody');
+  const empty  = document.getElementById('empty-state');
+  const search = document.getElementById('pkt-search').value;
+
+  const filtered = allPackets
+    .filter(p => matchesFilter(p) && matchesSearch(p, search))
+    .slice(-MAX_DISPLAY);
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'flex';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // If new packets appended and scrolled to bottom — append only
+  const wrap = document.getElementById('table-wrap');
+  const atBottom = wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 60;
+
+  if (newOnly && atBottom && activeFilter === 'all' && !search) {
+    // fast path: append only new rows
+    const frag = document.createDocumentFragment();
+    newOnly.forEach(p => {
+      const tr = buildRow(p, true);
+      frag.appendChild(tr);
+    });
+    tbody.appendChild(frag);
+    // trim old rows
+    while (tbody.rows.length > MAX_DISPLAY) tbody.deleteRow(0);
+    wrap.scrollTop = wrap.scrollHeight;
+    return;
+  }
+
+  // full re-render
+  const frag = document.createDocumentFragment();
+  filtered.forEach(p => frag.appendChild(buildRow(p, false)));
+  tbody.innerHTML = '';
+  tbody.appendChild(frag);
+  if (atBottom) wrap.scrollTop = wrap.scrollHeight;
+}
+
+function buildRow(p, isNew) {
+  const tr = document.createElement('tr');
+  tr.className = `sev-${p.severity}` + (isNew ? ' new-packet' : '');
+  tr.innerHTML = `
+    <td class="col-id">${p.id}</td>
+    <td class="col-time">${p.time}</td>
+    <td class="col-proto">${protoPill(p.protocol)}</td>
+    <td class="col-src">${fmtAddr(p.src_ip, p.src_port)}</td>
+    <td class="col-dst">${fmtAddr(p.dst_ip, p.dst_port)}</td>
+    <td class="col-len">${p.length}</td>
+    <td class="col-info" style="color:var(--dim)">${p.info || ''}</td>
+  `;
+  return tr;
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+function fmtBytes(b) {
+  if (b < 1024)       return b + ' B';
+  if (b < 1048576)    return (b/1024).toFixed(1) + ' KB';
+  if (b < 1073741824) return (b/1048576).toFixed(2) + ' MB';
+  return (b/1073741824).toFixed(2) + ' GB';
+}
+
+function updateStats(s) {
+  document.getElementById('total-count').textContent = s.total.toLocaleString();
+  document.getElementById('bytes-count').textContent = fmtBytes(s.bytes) + ' captured';
+  document.getElementById('s-tcp').textContent  = s.tcp;
+  document.getElementById('s-udp').textContent  = s.udp;
+  document.getElementById('s-dns').textContent  = s.dns;
+  document.getElementById('s-icmp').textContent = s.icmp;
+  document.getElementById('s-arp').textContent  = s.arp;
+
+  renderTopList('top-src',   s.top_src);
+  renderTopList('top-dst',   s.top_dst);
+  renderTopList('top-ports', s.top_ports);
+  updateDonut(s);
+  drawTimeline(s.timeline || []);
+}
+
+function renderTopList(id, items) {
+  const el  = document.getElementById(id);
+  if (!items || items.length === 0) { el.innerHTML = '<span style="color:var(--dim);font-family:var(--mono);font-size:10px">—</span>'; return; }
+  const max = items[0][1] || 1;
+  el.innerHTML = items.map(([label, count]) => `
+    <div class="top-item">
+      <div class="top-item-label">
+        <span style="max-width:130px;overflow:hidden;text-overflow:ellipsis">${label}</span>
+        <span>${count}</span>
+      </div>
+      <div class="top-bar-wrap">
+        <div class="top-bar-fill" style="width:${Math.round(count/max*100)}%"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Donut chart ────────────────────────────────────────────────────────────
+function updateDonut(s) {
+  const total = s.total || 1;
+  const CIRC  = 2 * Math.PI * 26;  // circumference
+
+  const segments = [
+    { id: 'd-tcp',   val: s.tcp  },
+    { id: 'd-udp',   val: s.udp  },
+    { id: 'd-dns',   val: s.dns  },
+    { id: 'd-icmp',  val: s.icmp },
+    { id: 'd-other', val: s.other + s.arp },
+  ];
+
+  let offset = 0;
+  segments.forEach(seg => {
+    const frac = seg.val / total;
+    const dash = frac * CIRC;
+    const gap  = CIRC - dash;
+    const el   = document.getElementById(seg.id);
+    el.setAttribute('stroke-dasharray', `${dash.toFixed(2)} ${gap.toFixed(2)}`);
+    el.setAttribute('stroke-dashoffset', (CIRC * 0.25 - offset).toFixed(2));
+    offset += dash;
+  });
+
+  document.getElementById('donut-total').textContent = s.total;
+}
+
+// ── Timeline sparkline ─────────────────────────────────────────────────────
+function drawTimeline(data) {
+  const canvas = document.getElementById('timeline-canvas');
+  canvas.width  = canvas.offsetWidth * window.devicePixelRatio;
+  canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+  const ctx  = canvas.getContext('2d');
+  const w    = canvas.width;
+  const h    = canvas.height;
+  const dpr  = window.devicePixelRatio;
+  ctx.scale(dpr, dpr);
+  const cw = canvas.offsetWidth;
+  const ch = canvas.offsetHeight;
+
+  ctx.clearRect(0, 0, cw, ch);
+  if (!data || data.length < 2) return;
+
+  const max  = Math.max(...data, 1);
+  const step = cw / (data.length - 1);
+
+  // gradient fill
+  const grad = ctx.createLinearGradient(0, 0, 0, ch);
+  grad.addColorStop(0,   'rgba(0,212,170,0.3)');
+  grad.addColorStop(1,   'rgba(0,212,170,0)');
+
+  ctx.beginPath();
+  ctx.moveTo(0, ch);
+  data.forEach((v, i) => {
+    const x = i * step;
+    const y = ch - (v / max) * (ch - 4);
+    i === 0 ? ctx.lineTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.lineTo((data.length - 1) * step, ch);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // line
+  ctx.beginPath();
+  data.forEach((v, i) => {
+    const x = i * step;
+    const y = ch - (v / max) * (ch - 4);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#00d4aa';
+  ctx.lineWidth   = 1.5;
+  ctx.stroke();
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  // re-draw timeline on resize
+  fetch('/api/stats').then(r=>r.json()).then(s => drawTimeline(s.timeline));
+});
+
+// Initial stats load
+fetch('/api/stats').then(r => r.json()).then(updateStats);
+</script>
+</body>
+</html>
