@@ -6,10 +6,13 @@ that the frontend polls every second to show live packet data.
 
 import os
 import sys
+from pathlib import Path
 from flask import Flask, jsonify, request, render_template, abort
 from . import capture
 
-app = Flask(__name__, template_folder="../templates")
+# Always resolve templates relative to this file — works from any venv or install path
+_TEMPLATES = Path(__file__).parent / "templates"
+app = Flask(__name__, template_folder=str(_TEMPLATES))
 app.config["SECRET_KEY"] = os.urandom(16)
 
 

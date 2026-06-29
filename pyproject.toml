@@ -26,4 +26,4 @@ where = ["."]
 include = ["netspy_pkg*"]
 
 [tool.setuptools.package-data]
-netspy_pkg = ["../templates/*"]
+netspy_pkg = ["templates/*"]
