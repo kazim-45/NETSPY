@@ -5,7 +5,7 @@
 Captures packets off your network interface using Scapy, parses them in real time, and streams the results to a dark-themed dashboard in your browser — protocol breakdown, top IPs, packets-per-second timeline, and a live-scrolling packet table with colour-coded severity.
 
 ```
-sudo netspy     →     http://127.0.0.1:5000
+netspy     →     http://127.0.0.1:5000
 ```
 
 ---
@@ -15,8 +15,6 @@ sudo netspy     →     http://127.0.0.1:5000
 ```bash
 git clone https://github.com/kazim-45/netspy.git
 cd netspy
-python3 -m venv venv
-source venv/bin/activate
 pip install -e .
 ```
 
@@ -28,16 +26,16 @@ Packet capture requires root on Linux/macOS (Scapy needs raw socket access).
 
 ```bash
 # Start the dashboard (opens browser automatically)
-sudo venv/bin/netspy
+netspy
 
 # Custom port
-sudo venv/bin/netspy --port 8080
+netspy --port 8080
 
 # Expose on your local network so other devices can view it
-sudo venv/bin/netspy --host 0.0.0.0
+netspy --host 0.0.0.0
 
 # Don't open browser automatically
-sudo venv/bin/netspy --no-browser
+netspy --no-browser
 
 # Help
 netspy --help
